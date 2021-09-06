@@ -2,6 +2,7 @@ package limit
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"sync"
@@ -46,11 +47,12 @@ func NewDefaultVegasLimit(
 	name string,
 	logger Logger,
 	registry core.MetricRegistry,
+	initLimit int,
 	tags ...string,
 ) *VegasLimit {
 	return NewVegasLimitWithRegistry(
 		name,
-		-1,
+		initLimit,
 		nil,
 		-1,
 		-1,
@@ -199,6 +201,7 @@ func newProbeJitter() float64 {
 func (l *VegasLimit) EstimatedLimit() int {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	//log.Println("Sibal", l.estimatedLimit)
 	return int(l.estimatedLimit)
 }
 
@@ -222,6 +225,7 @@ func (l *VegasLimit) OnSample(startTime int64, rtt int64, inFlight int, didDrop 
 	defer l.mu.Unlock()
 	l.commonSampler.Sample(rtt, inFlight, didDrop)
 
+	//log.Println("SSSSibal")
 	l.probeCount++
 	if l.shouldProbe() {
 		l.logger.Debugf("Probe triggered update to RTT No Load %d ms from %d ms",
@@ -233,10 +237,14 @@ func (l *VegasLimit) OnSample(startTime int64, rtt int64, inFlight int, didDrop 
 		return
 	}
 
+	//log.Println("Fuck you")
+
 	if l.rttNoLoad.Get() == 0 || float64(rtt) < l.rttNoLoad.Get() {
 		l.logger.Debugf("Update RTT No Load to %d ms from %d ms", rtt/1e6, int64(l.rttNoLoad.Get())/1e6)
 		l.rttNoLoad.Add(float64(rtt))
 		return
+	}else{
+		l.logger.Debugf("No Update RTT No Load to %d ms from %d ms", rtt/1e6, int64(l.rttNoLoad.Get())/1e6)
 	}
 
 	l.rttSampleListener.AddSample(l.rttNoLoad.Get())
@@ -253,6 +261,7 @@ func (l *VegasLimit) updateEstimatedLimit(startTime int64, rtt int64, inFlight i
 	var newLimit float64
 	// Treat any drop (i.e timeout) as needing to reduce the limit
 	if didDrop {
+		log.Println("Drop case")
 		newLimit = l.decreaseFunc(l.estimatedLimit)
 	} else if float64(inFlight)*2 < l.estimatedLimit {
 		// Prevent upward drift if not close to the limit
@@ -264,12 +273,15 @@ func (l *VegasLimit) updateEstimatedLimit(startTime int64, rtt int64, inFlight i
 
 		if queueSize < threshold {
 			// Aggressive increase when no queuing
+			log.Println("Case 1")
 			newLimit = l.estimatedLimit + float64(beta)
 		} else if queueSize < alpha {
 			// Increase the limit if queue is still manageable
+			log.Println("Case 2")
 			newLimit = l.increaseFunc(l.estimatedLimit)
 		} else if queueSize > beta {
 			// Detecting latency so decrease
+			log.Println("Case 3")
 			newLimit = l.decreaseFunc(l.estimatedLimit)
 		} else {
 			// otherwise we're within he sweet spot so nothing to do
