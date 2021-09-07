@@ -92,10 +92,10 @@ func writeSliceAtomic(latency int, latencySlice *[]int) {
 func (tx *transmitter) transmit(ctx context.Context, timeSlot int, SucNum *int32, FailNum *int32, latencySlice *[]int, serverTest bool, AIMD bool) (bool, error) {
 	id := ctx.Value(uint8(1)).(int)
 
-	//latency := time.Millisecond * time.Duration( rand.Intn(10) + 10*timeSlot  )
+	latency := time.Millisecond * time.Duration(rand.Intn(10)+10*timeSlot)
 	//latency := time.Millisecond * time.Duration(rand.Intn(10) )
 	//latency := time.Millisecond * time.Duration(10+rand.Intn(10)  - 1*timeSlot  )
-	latency := time.Millisecond * time.Duration(rand.Intn(10))
+	//latency := time.Millisecond * time.Duration(rand.Intn(10))
 	writeSliceAtomic(int(latency/time.Millisecond), latencySlice)
 	token, ok := tx.testLimiter.Acquire(ctx)
 
@@ -109,7 +109,6 @@ func (tx *transmitter) transmit(ctx context.Context, timeSlot int, SucNum *int32
 
 	if AIMD {
 		if int(latency/time.Millisecond) >= 20 {
-			log.Println("Asd")
 			time.Sleep(time.Millisecond * 20)
 			token.OnDropped()
 			return false, fmt.Errorf("Time out dropped\n")
@@ -140,7 +139,7 @@ func main() {
 	ReqScale := 25
 	TimeDuration := 20500
 	LimitValue := 20
-	ServerTestFlag := true
+	ServerTestFlag := false
 
 	for i := 0; i < TimeDuration/1000; i++ {
 		_, cosValue := math.Sincos(float64(2) * math.Pi * float64(i) / float64(TimeDuration/1000))
@@ -205,7 +204,7 @@ func main() {
 			wg.Add(int(perSecReqNum))
 			startTime := time.Now()
 			LatencySlice := []int{}
-			log.Println("Before start server C", timeSlot, " token :", atomic.LoadInt32(&serverC[timeSlot-1]))
+			//log.Println("Before start server C", timeSlot, " token :", atomic.LoadInt32(&serverC[timeSlot-1]))
 			lS.timeCosLog.WriteString(strconv.Itoa(timeSlot) + "	" + fmt.Sprintf("%d\n", atomic.LoadInt32(&serverC[timeSlot-1])))
 			for i := 0; i < int(perSecReqNum); i++ {
 				go func(j int32) {
@@ -217,7 +216,7 @@ func main() {
 				atomic.AddInt32(&reqCounter, 1)
 			}
 			wg.Wait()
-			log.Println("After start server C", timeSlot, " token :", atomic.LoadInt32(&serverC[timeSlot-1]))
+			//log.Println("After start server C", timeSlot, " token :", atomic.LoadInt32(&serverC[timeSlot-1]))
 
 			log.Print("Elapsed Time : ", time.Since(startTime).Seconds())
 			log.Printf("limit value %d,SucNum %d %f,"+

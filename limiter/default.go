@@ -3,6 +3,7 @@ package limiter
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -18,7 +19,7 @@ const (
 	defaultMaxWindowTime   = int64(1e9) // (1 s) nanoseconds
 	defaultMinRTTThreshold = int64(1e5) // (100 µs) nanoseconds
 	defaultWindowSize      = int(10)    // Minimum observed samples to filter out sample windows with not enough significant samples
-	usingWindow            = false
+	usingWindow            = true
 )
 
 // DefaultListener for
@@ -47,6 +48,7 @@ func (l *DefaultListener) OnSampleUsingWindow() {
 		},
 	)
 
+	log.Println(time.Unix(0, endTime), time.Unix(0, l.nextUpdateTime))
 	if endTime > l.nextUpdateTime {
 		// double check just to be sure
 		l.limiter.mu.Lock()
@@ -69,7 +71,15 @@ func (l *DefaultListener) OnSampleUsingWindow() {
 				if minWindowTime < minVal {
 					minVal = minWindowTime
 				}
+				log.Println("DefaultMinWindowSize", time.Duration(defaultMinWindowTime)/time.Nanosecond, defaultMinWindowTime)
+				log.Println("minval", time.Duration(minVal)/time.Nanosecond)
+				log.Println("limiter.minWindowTime", time.Duration(l.limiter.minWindowTime)/time.Nanosecond)
+				log.Println("minWIndowTime from, RTT", time.Duration(minWindowTime)/time.Nanosecond, minWindowTime)
+				log.Println("minWIndowTime from, RTT", time.Duration(current.CandidateRTTNanoseconds()*2)/time.Nanosecond, current.CandidateRTTNanoseconds()*2)
+
+				log.Println("Update before", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
 				l.limiter.nextUpdateTime = endTime + minVal
+				log.Println("Update after", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
 				l.limiter.limit.OnSample(
 					0,
 					current.CandidateRTTNanoseconds(),
