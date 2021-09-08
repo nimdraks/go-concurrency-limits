@@ -3,7 +3,6 @@ package limiter
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -14,12 +13,12 @@ import (
 	"github.com/platinummonkey/go-concurrency-limits/measurements"
 )
 
-const (
-	defaultMinWindowTime   = int64(1e9) // (1 s) nanoseconds
-	defaultMaxWindowTime   = int64(1e9) // (1 s) nanoseconds
-	defaultMinRTTThreshold = int64(1e5) // (100 µs) nanoseconds
-	defaultWindowSize      = int(10)    // Minimum observed samples to filter out sample windows with not enough significant samples
-	usingWindow            = true
+var (
+	DefaultMinWindowTime   = int64(1e9) // (1 s) nanoseconds
+	DefaultMaxWindowTime   = int64(1e9) // (1 s) nanoseconds
+	DefaultMinRTTThreshold = int64(1e5) // (100 µs) nanoseconds
+	DefaultWindowSize      = int(100)   // Minimum observed samples to filter out sample windows with not enough significant samples
+	UsingWindow            = true
 )
 
 // DefaultListener for
@@ -48,7 +47,7 @@ func (l *DefaultListener) OnSampleUsingWindow() {
 		},
 	)
 
-	log.Println(time.Unix(0, endTime), time.Unix(0, l.nextUpdateTime))
+	//log.Println(time.Unix(0, endTime), time.Unix(0, l.nextUpdateTime))
 	if endTime > l.nextUpdateTime {
 		// double check just to be sure
 		l.limiter.mu.Lock()
@@ -71,15 +70,16 @@ func (l *DefaultListener) OnSampleUsingWindow() {
 				if minWindowTime < minVal {
 					minVal = minWindowTime
 				}
-				log.Println("DefaultMinWindowSize", time.Duration(defaultMinWindowTime)/time.Nanosecond, defaultMinWindowTime)
-				log.Println("minval", time.Duration(minVal)/time.Nanosecond)
-				log.Println("limiter.minWindowTime", time.Duration(l.limiter.minWindowTime)/time.Nanosecond)
-				log.Println("minWIndowTime from, RTT", time.Duration(minWindowTime)/time.Nanosecond, minWindowTime)
-				log.Println("minWIndowTime from, RTT", time.Duration(current.CandidateRTTNanoseconds()*2)/time.Nanosecond, current.CandidateRTTNanoseconds()*2)
-
-				log.Println("Update before", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
+				/*
+					log.Println("DefaultMinWindowSize", time.Duration(defaultMinWindowTime)/time.Nanosecond, defaultMinWindowTime)
+					log.Println("minval", time.Duration(minVal)/time.Nanosecond)
+					log.Println("limiter.minWindowTime", time.Duration(l.limiter.minWindowTime)/time.Nanosecond)
+					log.Println("minWIndowTime from, RTT", time.Duration(minWindowTime)/time.Nanosecond, minWindowTime)
+					log.Println("minWIndowTime from, RTT", time.Duration(current.CandidateRTTNanoseconds()*2)/time.Nanosecond, current.CandidateRTTNanoseconds()*2)
+					log.Println("Update before", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
+				*/
 				l.limiter.nextUpdateTime = endTime + minVal
-				log.Println("Update after", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
+				//log.Println("Update after", time.Unix(0, endTime), time.Unix(0, l.limiter.nextUpdateTime))
 				l.limiter.limit.OnSample(
 					0,
 					current.CandidateRTTNanoseconds(),
@@ -94,7 +94,7 @@ func (l *DefaultListener) OnSampleUsingWindow() {
 
 func (l *DefaultListener) OnSuccess() {
 	l.token.Release()
-	if usingWindow {
+	if UsingWindow {
 		atomic.AddInt64(l.inFlight, -1)
 		l.OnSampleUsingWindow()
 	} else {
@@ -116,7 +116,7 @@ func (l *DefaultListener) OnIgnore() {
 // happens.
 func (l *DefaultListener) OnDropped() {
 	l.token.Release()
-	if usingWindow {
+	if UsingWindow {
 		l.limiter.updateAndGetSample(func(window measurements.ImmutableSampleWindow) measurements.ImmutableSampleWindow {
 			return *(window.AddDroppedSample(-1, int(l.currentMaxInFlight)))
 		})
@@ -159,10 +159,10 @@ func NewDefaultLimiterWithDefaults(
 	return NewDefaultLimiter(
 		//limit.NewDefaultVegasLimit(name, logger, registry, limitValue, tags...),
 		limit.NewDefaultGradient2Limit(name, logger, registry, tags...),
-		defaultMinWindowTime,
-		defaultMaxWindowTime,
-		defaultMinRTTThreshold,
-		defaultWindowSize,
+		DefaultMinWindowTime,
+		DefaultMaxWindowTime,
+		DefaultMinRTTThreshold,
+		DefaultWindowSize,
 		strategy,
 		logger,
 		registry,
@@ -181,10 +181,10 @@ func NewDefaultLimiterWithAIMD(
 ) (*DefaultLimiter, error) {
 	return NewDefaultLimiter(
 		limit.NewDefaultAIMDLimitWithParm(name, registry, initalLimit, backoffRatio, increaseBy, tags...),
-		defaultMinWindowTime,
-		defaultMaxWindowTime,
-		defaultMinRTTThreshold,
-		defaultWindowSize,
+		DefaultMinWindowTime,
+		DefaultMaxWindowTime,
+		DefaultMinRTTThreshold,
+		DefaultWindowSize,
 		strategy,
 		logger,
 		registry,

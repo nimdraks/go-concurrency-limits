@@ -76,7 +76,7 @@ func NewDefaultGradient2Limit(
 ) *Gradient2Limit {
 	l, _ := NewGradient2Limit(
 		name,
-		20,
+		100,
 		200,
 		10,
 		func(limit int) int { return 0 },
@@ -211,7 +211,7 @@ func (l *Gradient2Limit) OnSample(startTime int64, rtt int64, inFlight int, didD
 	}
 
 	// Don't grow the limit if we are app limited
-	log.Println("check",inFlight, l.estimatedLimit/2)
+	log.Println("check", inFlight, l.estimatedLimit/2)
 	if float64(inFlight) < l.estimatedLimit/2 {
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/platinummonkey/go-concurrency-limits/core"
 	"github.com/platinummonkey/go-concurrency-limits/limit/functions"
@@ -243,7 +244,7 @@ func (l *VegasLimit) OnSample(startTime int64, rtt int64, inFlight int, didDrop 
 		l.logger.Debugf("Update RTT No Load to %d ms from %d ms", rtt/1e6, int64(l.rttNoLoad.Get())/1e6)
 		l.rttNoLoad.Add(float64(rtt))
 		return
-	}else{
+	} else {
 		l.logger.Debugf("No Update RTT No Load to %d ms from %d ms", rtt/1e6, int64(l.rttNoLoad.Get())/1e6)
 	}
 
@@ -257,6 +258,7 @@ func (l *VegasLimit) shouldProbe() bool {
 
 func (l *VegasLimit) updateEstimatedLimit(startTime int64, rtt int64, inFlight int, didDrop bool) {
 	queueSize := int(math.Ceil(l.estimatedLimit * (1 - l.rttNoLoad.Get()/float64(rtt))))
+	log.Println("rttNoLoad :", time.Duration(l.rttNoLoad.Get())/time.Millisecond, "rtt :", time.Duration(rtt)/time.Millisecond)
 
 	var newLimit float64
 	// Treat any drop (i.e timeout) as needing to reduce the limit
@@ -270,6 +272,8 @@ func (l *VegasLimit) updateEstimatedLimit(startTime int64, rtt int64, inFlight i
 		alpha := l.alphaFunc(int(l.estimatedLimit))
 		beta := l.betaFunc(int(l.estimatedLimit))
 		threshold := l.thresholdFunc(int(l.estimatedLimit))
+
+		log.Println("queueSize:", queueSize, "alpha : ", alpha, "beta : ", beta, "threshold :", threshold)
 
 		if queueSize < threshold {
 			// Aggressive increase when no queuing

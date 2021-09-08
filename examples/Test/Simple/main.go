@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -20,6 +21,7 @@ import (
 
 var serverC []int32
 var mutex = &sync.Mutex{}
+var latencyMet = 1
 
 type transmitter struct {
 	testLimiter core.Limiter
@@ -92,10 +94,15 @@ func writeSliceAtomic(latency int, latencySlice *[]int) {
 func (tx *transmitter) transmit(ctx context.Context, timeSlot int, SucNum *int32, FailNum *int32, latencySlice *[]int, serverTest bool, AIMD bool) (bool, error) {
 	id := ctx.Value(uint8(1)).(int)
 
-	latency := time.Millisecond * time.Duration(rand.Intn(10)+10*timeSlot)
-	//latency := time.Millisecond * time.Duration(rand.Intn(10) )
-	//latency := time.Millisecond * time.Duration(10+rand.Intn(10)  - 1*timeSlot  )
-	//latency := time.Millisecond * time.Duration(rand.Intn(10))
+	var latency time.Duration
+	if latencyMet == 1 {
+		latency = time.Millisecond * time.Duration(rand.Intn(10)+10*timeSlot)
+	} else if latencyMet == 2 {
+		latency = time.Millisecond * time.Duration(300+rand.Intn(10)-10*timeSlot)
+	} else if latencyMet == 3 {
+		latency = time.Millisecond * time.Duration(rand.Intn(10))
+	}
+
 	writeSliceAtomic(int(latency/time.Millisecond), latencySlice)
 	token, ok := tx.testLimiter.Acquire(ctx)
 
@@ -136,14 +143,32 @@ func (tx *transmitter) transmit(ctx context.Context, timeSlot int, SucNum *int32
 func main() {
 	fmt.Println("Simple Test Setting")
 
-	ReqScale := 25
-	TimeDuration := 20500
-	LimitValue := 20
-	ServerTestFlag := false
+	ReqScalep := flag.Int("r", 100, "number of request")
+	ExperimentTimeDurationp := flag.Int("eTime", 30500, "Experiment time duration")
+	LimitValuep := flag.Int("lp", 100, "Limiting Value")
+	ServerTestFlagp := flag.Bool("stf", true, "Server Test Flag")
+	AIMDExperimentFlagp := flag.Bool("aef", true, "AIMD Experiment Flag")
+	DefaultWindowSizep := flag.Int("dws", 20, "Default Window Size")
+	UsingWindowp := flag.Bool("uw", true, "Using Window")
+	latencyMetp := flag.Int("lm", 3, "Latency method")
 
-	for i := 0; i < TimeDuration/1000; i++ {
-		_, cosValue := math.Sincos(float64(2) * math.Pi * float64(i) / float64(TimeDuration/1000))
-		cosValue = float64(10)*cosValue + float64(10)
+	flag.Parse()
+
+	ReqScale := *ReqScalep
+	ExperimentTimeDuration := *ExperimentTimeDurationp
+	LimitValue := *LimitValuep
+	ServerTestFlag := *ServerTestFlagp
+	AIMDExperimentFlag := *AIMDExperimentFlagp
+	limiter.DefaultWindowSize = *DefaultWindowSizep
+	limiter.UsingWindow = *UsingWindowp
+	latencyMet = *latencyMetp
+
+	fmt.Println(ReqScale, ExperimentTimeDuration, LimitValue,
+		ServerTestFlag, AIMDExperimentFlag, limiter.DefaultWindowSize, limiter.UsingWindow, latencyMet)
+
+	for i := 0; i < ExperimentTimeDuration/1000; i++ {
+		_, cosValue := math.Sincos(float64(2) * math.Pi * float64(i) / float64(ExperimentTimeDuration/1000))
+		cosValue = float64(50)*cosValue + float64(50)
 		serverC = append(serverC, int32(cosValue))
 	}
 
@@ -159,8 +184,8 @@ func main() {
 		"Simple_Test_Limiter",
 		limitStrategy,
 		limitStrategy.GetLimit(),
-		0.7,
-		5,
+		0.75,
+		3,
 		limit.BuiltinLimitLogger{},
 		core.EmptyMetricRegistryInstance,
 	)
@@ -171,7 +196,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	TestTotalDuration := time.NewTimer(time.Millisecond * time.Duration(TimeDuration))
+	TestTotalDuration := time.NewTimer(time.Millisecond * time.Duration(ExperimentTimeDuration))
 	logTicker := time.NewTicker(time.Second * 1)
 	wg := sync.WaitGroup{}
 	reqCounter := int32(0)
@@ -191,7 +216,7 @@ func main() {
 
 	LimitLogger := log.New(lS.LimitLog, "", 0)
 	//lS.ReqLatencyLog.WriteString(strconv.Itoa(timeSlot))
-	perSecReqNum := int32(time.Second / (time.Millisecond * time.Duration(ReqScale)))
+	perSecReqNum := ReqScale
 
 	for {
 		select {
@@ -211,7 +236,7 @@ func main() {
 					defer wg.Done()
 					//log.Printf("%dth request is started", i)
 					ctx := context.WithValue(context.Background(), uint8(1), int(j)+1)
-					testTransmitter.transmit(ctx, timeSlot, &SucNum, &FailNum, &LatencySlice, ServerTestFlag, true)
+					testTransmitter.transmit(ctx, timeSlot, &SucNum, &FailNum, &LatencySlice, ServerTestFlag, AIMDExperimentFlag)
 				}(reqCounter)
 				atomic.AddInt32(&reqCounter, 1)
 			}
